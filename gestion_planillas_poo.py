@@ -147,3 +147,110 @@ class Empleado:
         self.calcular_boleta_pago().mostrar_detalle()
 
     def __str__(self): return f"DNI: {self.dni} | Nombre: {self.nombre} | Área: {self.area.nombre}"
+    class Usuario:
+    """Clase base para todos los usuarios del sistema."""
+    def _init_(self, nombre, contrasena):
+        self._nombre = nombre; self._contrasena = contrasena
+    @property
+    def nombre(self): return self._nombre
+    def iniciar_sesion(self, contrasena): return self._contrasena == contrasena
+
+
+class UsuarioEmpleado(Usuario):
+    """Usuario con rol de Empleado."""
+    def _init_(self, nombre, contrasena, empleado):
+        super()._init_(nombre, contrasena); self.empleado = empleado
+
+
+class UsuarioRRHH(Usuario):
+    """Usuario con rol de Recursos Humanos."""
+    def _init_(self, nombre, contrasena, controlador):
+        super()._init_(nombre, contrasena); self._controlador = controlador
+    def gestionar_empleados(self, *args): return self._controlador.registrar_empleado(*args)
+    def verificar_estado(self, dni, tipo):
+        empleado = self._controlador.buscar_empleado(dni)
+        if not empleado: print("Error: No se encontró un empleado con ese DNI."); return
+        if tipo == "asistencia": print(f"-> Estado de Asistencia: {empleado.estado_asistencia}")
+        elif tipo == "cumplimiento": print(f"-> Puntaje de Cumplimiento: {empleado.estado_cumplimiento}")
+    def revocar_bono_desempeno(self, dni):
+        empleado = self._controlador.buscar_empleado(dni)
+        if not empleado: print("Error: No se encontró un empleado con ese DNI."); return
+        if empleado._bono_por_avance_actual:
+            print(f"Bono por avance eliminado para el empleado {empleado.nombre}.")
+            empleado._bono_por_avance_actual = None
+        else: print(f"El empleado {empleado.nombre} no tiene un bono por avance activo para eliminar.")
+    
+    def gestionar_vacaciones(self, dni):
+        empleado = self._controlador.buscar_empleado(dni)
+        if not empleado: print("Error: No se encontró un empleado con ese DNI."); return
+        pendientes = [v for v in empleado.vacaciones if v.estado == "Pendiente"]
+        if not pendientes: print(f"El empleado no tiene solicitudes de vacaciones pendientes."); return
+        
+        print(f"\nSolicitudes pendientes para {empleado.nombre}:")
+        for i, v in enumerate(pendientes, 1): print(f"  {i}. {v}")
+        try:
+            opcion = int(input("Elige el nro. de la solicitud a gestionar (0 para cancelar): "))
+            if 0 < opcion <= len(pendientes):
+                solicitud = pendientes[opcion - 1]
+                accion = input("¿Desea 'aprobar' o 'rechazar' la solicitud? > ").lower()
+                if accion == 'aprobar':
+                    aprobadas = [v for v in empleado.vacaciones if v.estado == "Aprobada"]
+                    hay_cruce = any(max(solicitud.fecha_inicio, v.fecha_inicio) <= min(solicitud.fecha_fin, v.fecha_fin) for v in aprobadas)
+                    if hay_cruce: print("Error: La solicitud se cruza con otras vacaciones ya aprobadas.")
+                    else: solicitud.estado = "Aprobada"; print("Solicitud aprobada.")
+                elif accion == 'rechazar': solicitud.estado = "Rechazada"; print("Solicitud rechazada.")
+                else: print("Acción no válida.")
+        except ValueError: print("Debes ingresar un número válido.")
+
+
+class UsuarioGerencia(Usuario):
+    """Usuario con rol de Gerencia."""
+    def _init_(self, nombre, contrasena, controlador):
+        super()._init_(nombre, contrasena); self._controlador = controlador
+    def generar_reporte(self, tipo):
+        empleados = self._controlador.empleados
+        if tipo == 1: print("\n--- REPORTE POR ÁREA ---"); [print(f"- {e.nombre} | {e.area.nombre}") for e in empleados]
+        elif tipo == 2:
+            print("\n--- REPORTE DE COSTO DE PLANILLA ---")
+            costo = sum(e.calcular_boleta_pago().sueldo_neto for e in empleados)
+            print(f"Costo Total de Sueldos Netos: S/.{costo:.2f}")
+
+
+class SistemaRRHH:
+    """Clase controladora que centraliza la lógica y el estado del sistema."""
+    def _init_(self):
+        self._empleados, self._usuarios_empleados = [], {}
+        self._areas = {"TI": Area("Tecnología"), "ADM": Area("Administración")}
+        self._cargos = {"JR": Cargo("Junior"), "SR": Cargo("Senior")}
+        self._afp = DescuentoPrevisional("AFP", 12.0); self._bono_desemp = Bono("Desempeño Alto", 450.0)
+        self._puestos_validos = [
+            "Desarrollador Backend", "Desarrollador Frontend", "Analista QA", "DevOps",
+            "Asistente Administrativo", "Contador", "Jefe de Operaciones", "Analista de Marketing"
+        ]
+
+    @property
+    def empleados(self): return self._empleados
+    @property
+    def puestos_validos(self): return self._puestos_validos
+
+    def buscar_empleado(self, dni):
+        for emp in self._empleados:
+            if emp.dni == dni: return emp
+        return None
+    
+    def registrar_empleado(self, dni, nombre, puesto, salario, area_key, cargo_key):
+        """Factory Method para crear y configurar un nuevo empleado y su usuario."""
+        if self.buscar_empleado(dni): print("Error: DNI ya registrado."); return False
+        area = self._areas.get(area_key.upper(), self._areas["TI"]); cargo = self._cargos.get(cargo_key.upper(), self._cargos["JR"])
+        empleado = Empleado(dni, nombre, puesto, salario, area, cargo)
+        empleado.evaluacion_actual = Evaluacion(periodo="2025-Q4"); empleado.descuento_previsional = self._afp
+        empleado.bono_desempeno_base = self._bono_desemp
+        partes = nombre.strip().split(); primer_nombre = partes[0].capitalize()
+        inicial = partes[1][0].upper() if len(partes) > 1 else ""
+        base_user = f"{primer_nombre}{inicial}"; user = base_user; i = 1
+        while user in self._usuarios_empleados: user = f"{base_user}{i}"; i += 1
+        usuario = UsuarioEmpleado(user, "clave123", empleado)
+        self._empleados.append(empleado)
+        self._usuarios_empleados[usuario.nombre] = usuario
+        print(f"Empleado {nombre} registrado.\n   Usuario: '{usuario.nombre}', Clave: 'clave123'.")
+        return True
