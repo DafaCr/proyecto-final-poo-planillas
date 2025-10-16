@@ -254,3 +254,138 @@ class SistemaRRHH:
         self._usuarios_empleados[usuario.nombre] = usuario
         print(f"Empleado {nombre} registrado.\n   Usuario: '{usuario.nombre}', Clave: 'clave123'.")
         return True
+    
+    # --- INICIO DE LA PARTE DE JOSEPH HP ---
+
+def manejar_menu_empleado(usuario):
+    """Gestiona el bucle de menú para el rol de Empleado."""
+    print("\n--- MENÚ EMPLEADO ---\n1. Ver Boleta\n2. Marcar Asistencia\n3. Registrar Avance\n4. Verificar Cumplimiento\n5. Solicitar Vacaciones\n6. Ver Estado de Vacaciones\n7. Cerrar Sesión")
+    opcion = input("Seleccione una opción > ")
+    if opcion == '1': usuario.empleado.consultar_boleta_pago()
+    elif opcion == '2': usuario.empleado.registrar_asistencia()
+    elif opcion == '3':
+        while True:
+            try:
+                porcentaje = float(input("Ingrese su porcentaje de avance (0-100) > "))
+                if 0 <= porcentaje <= 100:
+                    usuario.empleado.registrar_avance_trabajo(porcentaje); break
+                else: print("Error: El porcentaje debe estar entre 0 y 100.")
+            except ValueError: print("Error: Debe ingresar un valor numérico.")
+    elif opcion == '4': usuario.empleado.verificar_cumplimiento()
+    elif opcion == '5':
+        try:
+            inicio_str = input("Fecha de inicio (DD/MM/YYYY): "); fin_str = input("Fecha de fin (DD/MM/YYYY): ")
+            fecha_inicio = datetime.datetime.strptime(inicio_str, "%d/%m/%Y").date()
+            fecha_fin = datetime.datetime.strptime(fin_str, "%d/%m/%Y").date()
+            if fecha_inicio > fecha_fin: print("Error: La fecha de inicio no puede ser posterior a la de fin.")
+            elif (fecha_fin - fecha_inicio).days > 31: print("Error: No se pueden solicitar más de 31 días.")
+            else: usuario.empleado.solicitar_vacaciones(fecha_inicio, fecha_fin)
+        except ValueError: print("Error: Formato de fecha incorrecto. Usa DD/MM/YYYY.")
+    elif opcion == '6': usuario.empleado.consultar_estado_vacaciones()
+    elif opcion == '7': print("Sesión cerrada."); return None
+    else: print("Opción no válida.")
+    return usuario
+
+def manejar_menu_rrhh(usuario, sistema):
+    """Gestiona el bucle de menú para el rol de RRHH."""
+    print("\n--- MENÚ RRHH ---\n1. Registrar Empleado\n2. Calcular Boleta\n3. Ver Lista Empleados\n4. Verificar Asistencia\n5. Verificar Cumplimiento\n6. Revocar Bono\n7. Gestionar Vacaciones\n8. Cerrar Sesión")
+    opcion = input("Seleccione una opción > ")
+    if opcion == '1':
+        while True:
+            dni = input("DNI (8 dígitos): ").strip()
+            if dni.isdigit() and len(dni) == 8: break
+            else: print("Error: El DNI debe contener exactamente 8 dígitos numéricos.")
+        while True:
+            nombre = input("Nombre completo: ").strip()
+            partes = nombre.split()
+            if nombre and len(partes) >= 2 and all(c.isalpha() or c.isspace() for c in nombre): break
+            else: print("Error: Ingrese un nombre y apellido válidos (solo letras).")
+        while True:
+            print(f"Puestos disponibles: {', '.join(sistema.puestos_validos)}")
+            puesto = input("Puesto: ").strip()
+            if any(p.lower() == puesto.lower() for p in sistema.puestos_validos):
+                puesto = [p for p in sistema.puestos_validos if p.lower() == puesto.lower()][0]
+                break
+            else: print(f"Error: Puesto no válido. Elija uno de la lista.")
+        while True:
+            try:
+                salario = float(input("Salario (mínimo S/.1130): "))
+                if salario >= 1130: break
+                else: print("Error: El salario no puede ser menor al sueldo mínimo de S/.1130.")
+            except ValueError: print("Error: Por favor, ingrese un monto numérico para el salario.")
+        while True:
+            area = input("Área (TI/ADM): ").strip().upper()
+            if area in ["TI", "ADM"]: break
+            else: print("Error: El área solo puede ser 'TI' o 'ADM'.")
+        while True:
+            cargo = input("Cargo (JR/SR): ").strip().upper()
+            if cargo in ["JR", "SR"]: break
+            else: print("Error: El cargo solo puede ser 'JR' o 'SR'.")
+        usuario.gestionar_empleados(dni, nombre, puesto, salario, area, cargo)
+    elif opcion in ['2', '4', '5', '6', '7']:
+        dni = input("Ingrese el DNI del empleado > ")
+        empleado = sistema.buscar_empleado(dni)
+        if not empleado: print("Error: No se encontró un empleado con ese DNI."); return usuario
+        if opcion == '2': empleado.consultar_boleta_pago()
+        elif opcion == '4': usuario.verificar_estado(dni, "asistencia")
+        elif opcion == '5': usuario.verificar_estado(dni, "cumplimiento")
+        elif opcion == '6': usuario.revocar_bono_desempeno(dni)
+        elif opcion == '7': usuario.gestionar_vacaciones(dni)
+    elif opcion == '3':
+        print("\n--- LISTA DE EMPLEADOS ---")
+        if not sistema.empleados: print("No hay empleados registrados."); return usuario
+        for emp in sistema.empleados: print(emp)
+    elif opcion == '8': print("Sesión cerrada."); return None
+    else: print("Opción no válida.")
+    return usuario
+
+
+def manejar_menu_gerencia(usuario, sistema):
+    """Gestiona el bucle de menú para el rol de Gerencia."""
+    print("\n--- MENÚ GERENCIA ---\n1. Reporte por Área\n2. Reporte de Costo de Planilla\n3. Cerrar Sesión")
+    opcion = input("Jarvis: ¿Qué necesita, señor? > ")
+    if opcion == '1': usuario.generar_reporte(1)
+    elif opcion == '2': usuario.generar_reporte(2)
+    elif opcion == '3': print("Jarvis: Desconectando. Que tenga un buen día, señor Stark."); return None
+    else: print("Jarvis: Señor, esa no es una opción válida en mis protocolos.")
+    return usuario
+
+
+def main():
+    """Función principal que inicia y controla el flujo del programa."""
+    sistema = SistemaRRHH()
+    usuarios_sistema = {"RRHH": UsuarioRRHH("RRHH", "123", sistema), "tonystark": UsuarioGerencia("tonystark", "9000", sistema)}
+    
+    sistema.registrar_empleado("74889304", "Renato Prado", "Desarrollador Backend", 3500.0, "TI", "JR")
+    
+    print("--- SISTEMA DE GESTIÓN DE PLANILLAS STARK ---")
+    usuario_actual = None
+    while True:
+        try:
+            if usuario_actual is None:
+                print("\n--- INICIO DE SESIÓN ---")
+                nombre = input("Usuario (o escriba 'salir' para terminar): ").strip()
+                if nombre.lower() == 'salir':
+                    print("Gracias por usar el Sistema de Planillas Stark. ¡Hasta luego!")
+                    break
+                
+                contrasena = input("Contraseña: ").strip()
+                usuario = usuarios_sistema.get(nombre) or sistema._usuarios_empleados.get(nombre)
+                
+                if usuario and usuario.iniciar_sesion(contrasena):
+                    usuario_actual = usuario
+                    if usuario_actual.nombre == "tonystark": print("\nJarvis: Bienvenido de vuelta, señor.")
+                    else: print(f"\nBienvenido, {usuario_actual.nombre}.")
+                else: print("Usuario o contraseña incorrectos.")
+                continue
+            
+            if isinstance(usuario_actual, UsuarioEmpleado): usuario_actual = manejar_menu_empleado(usuario_actual)
+            elif isinstance(usuario_actual, UsuarioRRHH): usuario_actual = manejar_menu_rrhh(usuario_actual, sistema)
+            elif isinstance(usuario_actual, UsuarioGerencia): usuario_actual = manejar_menu_gerencia(usuario_actual, sistema)
+        
+        except ValueError: print("\nError: Se esperaba un valor numérico donde se ingresó texto.")
+        except Exception as e: print(f"\nHa ocurrido un error inesperado: {e}")
+
+if _name_ == "_main_":
+    main()
+
