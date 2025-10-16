@@ -75,5 +75,5 @@ class TestCalculosEmpleado(unittest.TestCase):
         # Salario (4000) + Medio Bono (225) - Impuesto (10% de 4000 = 400) = 3825
         self.assertAlmostEqual(boleta.sueldo_neto, 3825.0)
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     unittest.main()
